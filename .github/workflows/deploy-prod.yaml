@@ -1,0 +1,165 @@
+name: DEPLOY PROD
+
+on:
+  push:
+    branches:
+      - "prod"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  owner: "Chowville"
+  repository: "DevOps"
+  project: "calcottech"
+  region: "eu-west-3"
+  domain: "chowville.app"
+  namespace: "chvp"
+  environment: "dev"
+  app_secret: "chvp-prod-secret"
+  probe_url: "/v1/ping"
+  port: 7000
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    name: Test changed-files
+    outputs:
+      file-changed: ${{ steps.changed-files.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: List all changed files
+        run: |
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "$file was changed"
+          done
+      - name: Get changed files API
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          files: |
+            src/**
+            .github/workflows/**
+            config/**
+            docker/**
+            **.json
+            **.js
+
+      - name: Run step if any file(s) in the docs folder change
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          echo "One or more files in the docs folder has changed."
+          echo "List all the files that have changed: ${{ steps.changed-files.outputs.all_changed_files }}"
+
+  envs:
+    name: "Envs"
+    needs: [changes]
+    runs-on: ubuntu-latest
+    outputs:
+      owner: ${{ steps.variables.outputs.owner }}
+      repository: ${{ steps.variables.outputs.repository }}
+      project: ${{ steps.variables.outputs.project }}
+      region: ${{ steps.variables.outputs.region }}
+      domain: ${{ steps.variables.outputs.domain }}
+      port: ${{ steps.variables.outputs.port }}
+      namespace: ${{ steps.variables.outputs.namespace }}
+      environment: ${{ steps.variables.outputs.environment }}
+      app_secret: ${{ steps.variables.outputs.app_secret }}
+    steps:
+      - name: Set outputs
+        id: variables
+        run: |
+          echo "owner=${{ env.owner }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ env.repository }}" >> $GITHUB_OUTPUT
+          echo "project=${{ env.project }}" >> $GITHUB_OUTPUT
+          echo "region=${{ env.region }}" >> $GITHUB_OUTPUT
+          echo "domain=${{ env.domain }}" >> $GITHUB_OUTPUT
+          echo "port=${{ env.port }}" >> $GITHUB_OUTPUT
+          echo "namespace=${{env.namespace}}" >> $GITHUB_OUTPUT
+          echo "environment=${{env.environment}}" >> $GITHUB_OUTPUT
+          echo "app_secret=${{env.app_secret}}" >> $GITHUB_OUTPUT
+
+  deploy-service:
+    name: "Service"
+    permissions: write-all
+    needs: [ envs ]
+    uses: ./.github/workflows/ci.yaml
+    with:
+      is_workflow: true
+      name: service
+      owner: ${{ needs.envs.outputs.owner }}
+      project: ${{ needs.envs.outputs.project }}
+      region: ${{ needs.envs.outputs.region }}
+      repository: ${{ needs.envs.outputs.repository }}
+      environment: ${{ needs.envs.outputs.environment }}
+      namespace: ${{ needs.envs.outputs.namespace }}
+      port: ${{ needs.envs.outputs.port }}
+      app_secret: ${{ needs.envs.outputs.app_secret }}
+      service: ${{ needs.envs.outputs.namespace }}-service
+      hostname-format: service.prod.${{ needs.envs.outputs.domain }}
+      dockerfile: "./docker/service/Dockerfile"
+      buildCommand: "yarn build"
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      GH_CUSTOM_TOKEN: ${{ secrets.GH_CUSTOM_TOKEN }}
+
+  deploy-worker:
+    name: "Worker"
+    permissions: write-all
+    needs: [ envs ]
+    uses: ./.github/workflows/ci.yaml
+    with:
+      is_workflow: true
+      name: worker
+      owner: ${{ needs.envs.outputs.owner }}
+      project: ${{ needs.envs.outputs.project }}
+      region: ${{ needs.envs.outputs.region }}
+      repository: ${{ needs.envs.outputs.repository }}
+      environment: ${{ needs.envs.outputs.environment }}
+      namespace: ${{ needs.envs.outputs.namespace }}
+      port: ${{ needs.envs.outputs.port }}
+      app_secret: ${{ needs.envs.outputs.app_secret }}
+      service: ${{ needs.envs.outputs.namespace }}-worker
+      hostname-format: worker.prod.${{ needs.envs.outputs.domain }}
+      dockerfile: "./docker/worker/Dockerfile"
+      buildCommand: "npm run build:worker --if-present"
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      GH_CUSTOM_TOKEN: ${{ secrets.GH_CUSTOM_TOKEN }}
+
+  deploy-admin:
+    name: "Admin"
+    permissions: write-all
+    needs: [ envs ]
+    uses: ./.github/workflows/ci.yaml
+    with:
+      is_workflow: true
+      name: admin
+      owner: ${{ needs.envs.outputs.owner }}
+      project: ${{ needs.envs.outputs.project }}
+      region: ${{ needs.envs.outputs.region }}
+      repository: ${{ needs.envs.outputs.repository }}
+      environment: ${{ needs.envs.outputs.environment }}
+      namespace: ${{ needs.envs.outputs.namespace }}
+      port: ${{ needs.envs.outputs.port }}
+      app_secret: ${{ needs.envs.outputs.app_secret }}
+      service: ${{ needs.envs.outputs.namespace }}-admin
+      hostname-format: admin.prod.${{ needs.envs.outputs.domain }}
+      dockerfile: "./docker/admin/Dockerfile"
+      buildCommand: "npm run build:admin --if-present"
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      GH_CUSTOM_TOKEN: ${{ secrets.GH_CUSTOM_TOKEN }}
