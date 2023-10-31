@@ -1,3 +1,6 @@
+# # syntax=docker/dockerfile:1
+
+# # Comments are provided throughout this file to help you get started.
 ## Stage 1. Compile TS sources to JS
 FROM node:16-alpine as builder
 # Set build directory
@@ -10,7 +13,7 @@ COPY ./package*.json ./*.lock ./tsconfig.json ./tsconfig.build.json ./nest-cli.j
 RUN yarn install --frozen-lockfile --dev
 
 # Copy sources
-COPY ./apps/mpr-service ./apps/mpr-service
+COPY . .
 COPY ./config ./config
 COPY ./libs ./libs
 
@@ -27,8 +30,8 @@ WORKDIR /usr/src/app
 # Install app dependencies
 COPY package.json ./
 RUN yarn install --frozen-lockfile --production
-COPY --from=builder /usr/src/app/dist/apps/mpr-service ./dist
+COPY --from=builder /usr/src/app/dist ./dist
 # Expose port for use
 EXPOSE 7000
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

@@ -72,16 +72,6 @@ export class AppController {
         this.mongoService.pingCheck('mongoDB', {
           connection: this.connection,
         }),
-      () =>
-        this.m_service.pingCheck<RedisOptions>('redis', {
-          transport: Transport.REDIS,
-          options: {
-            host: redis.hostname,
-            username: redis.username,
-            password: redis.password,
-            port: Number(redis.port),
-          },
-        }),
     ]);
   }
 
