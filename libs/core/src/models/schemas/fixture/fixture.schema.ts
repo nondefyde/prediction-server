@@ -21,15 +21,16 @@ export class Fixture {
   publicId: string;
 
   @Prop({
-    type: [MongooseSchema.Types.ObjectId],
-    ref: 'Team',
+    type: [String],
     required: true,
+    lowercase:true
   })
-  teams: any[];
+  teams: string[];
 
   @Prop({
     type: [String],
     required: true,
+    lowercase:true
   })
   predictions: string[];
 
